@@ -2,9 +2,7 @@ package com.inventory.controller;
 
 import com.inventory.dto.ProductRequestDto;
 import com.inventory.dto.ProductResponseDto;
-import com.inventory.exception.DuplicateSkuException;
-import com.inventory.model.Product;
-import com.inventory.repository.ProductRepository;
+import com.inventory.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,49 +16,37 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProductController {
 
-    private final ProductRepository productRepository;
+    private final ProductService productService;
 
-    @GetMapping
-    public ResponseEntity<List<ProductResponseDto>> getAllProducts() {
-        List<ProductResponseDto> response = productRepository.findAll().stream()
-                .map(this::mapToResponseDto)
-                .toList();
-        return ResponseEntity.ok(response);
+    @PostMapping
+    public ResponseEntity<ProductResponseDto> createProduct(@Valid @RequestBody ProductRequestDto requestDto) {
+        ProductResponseDto createdProduct = productService.createProduct(requestDto);
+        return new ResponseEntity<>(createdProduct, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponseDto> getProductById(@PathVariable Long id) {
-        return productRepository.findById(id)
-                .map(this::mapToResponseDto)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        ProductResponseDto product = productService.getProductById(id);
+        return ResponseEntity.ok(product);
     }
 
-    @PostMapping
-    public ResponseEntity<ProductResponseDto> createProduct(@Valid @RequestBody ProductRequestDto requestDto) {
-        if (productRepository.existsBySku(requestDto.getSku())) {
-            throw new DuplicateSkuException("Product with SKU '" + requestDto.getSku() + "' already exists.");
-        }
-
-        Product product = Product.builder()
-                .sku(requestDto.getSku())
-                .name(requestDto.getName())
-                .price(requestDto.getPrice())
-                .stockQuantity(requestDto.getStockQuantity())
-                .build();
-
-        Product savedProduct = productRepository.save(product);
-        return new ResponseEntity<>(mapToResponseDto(savedProduct), HttpStatus.CREATED);
+    @GetMapping
+    public ResponseEntity<List<ProductResponseDto>> getAllProducts() {
+        List<ProductResponseDto> products = productService.getAllProducts();
+        return ResponseEntity.ok(products);
     }
 
-    private ProductResponseDto mapToResponseDto(Product product) {
-        return ProductResponseDto.builder()
-                .id(product.getId())
-                .sku(product.getSku())
-                .name(product.getName())
-                .price(product.getPrice())
-                .stockQuantity(product.getStockQuantity())
-                .inStock(product.getStockQuantity() != null && product.getStockQuantity() > 0)
-                .build();
+    @PutMapping("/{id}")
+    public ResponseEntity<ProductResponseDto> updateProduct(
+            @PathVariable Long id,
+            @Valid @RequestBody ProductRequestDto requestDto) {
+        ProductResponseDto updatedProduct = productService.updateProduct(id, requestDto);
+        return ResponseEntity.ok(updatedProduct);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
+        productService.deleteProduct(id);
+        return ResponseEntity.noContent().build();
     }
 }
