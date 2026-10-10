@@ -49,7 +49,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        log.error("Data integrity violation occurred: ", ex);
+        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
 
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
