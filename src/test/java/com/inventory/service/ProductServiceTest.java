@@ -72,6 +72,8 @@ class ProductServiceTest {
         Product captured = productCaptor.getValue();
         assertThat(captured.getSku(), is("SKU-001"));
         assertThat(captured.getName(), is("Mechanical Keyboard"));
+        assertThat(captured.getPrice(), is(new BigDecimal("99.99")));
+        assertThat(captured.getStockQuantity(), is(15));
     }
 
     @Test
