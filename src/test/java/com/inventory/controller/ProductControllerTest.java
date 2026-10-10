@@ -129,6 +129,26 @@ class ProductControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/v1/products - Validation fails across multiple distinct fields (price & stockQuantity)")
+    void createProduct_ValidationFailure_MultipleFieldErrors() throws Exception {
+        // Price is null (@NotNull) and stockQuantity is negative (@PositiveOrZero)
+        ProductRequestDto requestDto = ProductRequestDto.builder()
+                .sku("SKU-VALID")
+                .name("Valid Name")
+                .price(null)
+                .stockQuantity(-10)
+                .build();
+
+        mockMvc.perform(post("/api/v1/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(requestDto)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors.price", is("Price is required")))
+                .andExpect(jsonPath("$.errors.stockQuantity", is("Stock quantity cannot be negative")));
+    }
+
+    @Test
     @DisplayName("POST /api/v1/products - Raw JSON with whitespace is trimmed before repository save")
     void createProduct_TrimsInputInSetters() throws Exception {
         String rawJsonWithPadding = """
