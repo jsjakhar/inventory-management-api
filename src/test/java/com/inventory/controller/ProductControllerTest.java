@@ -2,11 +2,12 @@ package com.inventory.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inventory.dto.ProductRequestDto;
-import com.inventory.exception.DuplicateSkuException;
 import com.inventory.model.Product;
 import com.inventory.repository.ProductRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,9 +18,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.util.Optional;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -37,8 +39,11 @@ class ProductControllerTest {
     @MockBean
     private ProductRepository productRepository;
 
+    @Captor
+    private ArgumentCaptor<Product> productCaptor;
+
     @Test
-    @DisplayName("POST /api/v1/products - Success (201 Created)")
+    @DisplayName("POST /api/v1/products - Success captures entity and verifies all fields")
     void createProduct_Success() throws Exception {
         ProductRequestDto requestDto = ProductRequestDto.builder()
                 .sku("SKU-100")
@@ -65,7 +70,18 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.sku").value("SKU-100"))
                 .andExpect(jsonPath("$.name").value("Wireless Mouse"))
+                .andExpect(jsonPath("$.price").value(29.99))
+                .andExpect(jsonPath("$.stockQuantity").value(50))
                 .andExpect(jsonPath("$.inStock").value(true));
+
+        // Verify captured arguments sent to database layer
+        verify(productRepository).save(productCaptor.capture());
+        Product capturedProduct = productCaptor.getValue();
+
+        assertThat(capturedProduct.getSku(), is("SKU-100"));
+        assertThat(capturedProduct.getName(), is("Wireless Mouse"));
+        assertThat(capturedProduct.getPrice(), is(new BigDecimal("29.99")));
+        assertThat(capturedProduct.getStockQuantity(), is(50));
     }
 
     @Test
@@ -90,34 +106,39 @@ class ProductControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/products - Multiple validation failures merge error messages (400 Bad Request)")
+    @DisplayName("POST /api/v1/products - Multiple validation failures on single field merge error messages")
     void createProduct_ValidationFailure_MergesErrorMessages() throws Exception {
-        // Name is short (< 2 chars) AND price is missing
-        ProductRequestDto requestDto = ProductRequestDto.builder()
-                .sku("SKU-999")
-                .name("A") // Fails @Size(min = 2)
-                .price(null) // Fails @NotNull
-                .stockQuantity(-5) // Fails @PositiveOrZero
-                .build();
+        // Name is " " which fails both @NotBlank and @Size(min = 2)
+        String rawJson = """
+                {
+                    "sku": "SKU-999",
+                    "name": " ",
+                    "price": 19.99,
+                    "stockQuantity": 10
+                }
+                """;
 
         mockMvc.perform(post("/api/v1/products")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestDto)))
+                        .content(rawJson))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.errors.name").exists())
-                .andExpect(jsonPath("$.errors.price").exists())
-                .andExpect(jsonPath("$.errors.stockQuantity").exists());
+                .andExpect(jsonPath("$.errors.name", containsString("; ")))
+                .andExpect(jsonPath("$.errors.name", containsString("Product name is required")))
+                .andExpect(jsonPath("$.errors.name", containsString("Product name must be between 2 and 100 characters")));
     }
 
     @Test
-    @DisplayName("POST /api/v1/products - Padded input is trimmed before validation runs")
+    @DisplayName("POST /api/v1/products - Raw JSON with whitespace is trimmed before repository save")
     void createProduct_TrimsInputInSetters() throws Exception {
-        ProductRequestDto requestDto = new ProductRequestDto();
-        requestDto.setSku("  SKU-TRIMMED  ");
-        requestDto.setName("  Gaming Headset  ");
-        requestDto.setPrice(new BigDecimal("49.99"));
-        requestDto.setStockQuantity(20);
+        String rawJsonWithPadding = """
+                {
+                    "sku": "  SKU-TRIMMED  ",
+                    "name": "  Gaming Headset  ",
+                    "price": 49.99,
+                    "stockQuantity": 20
+                }
+                """;
 
         Product savedProduct = Product.builder()
                 .id(2L)
@@ -132,10 +153,15 @@ class ProductControllerTest {
 
         mockMvc.perform(post("/api/v1/products")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestDto)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.sku").value("SKU-TRIMMED"))
-                .andExpect(jsonPath("$.name").value("Gaming Headset"));
+                        .content(rawJsonWithPadding))
+                .andExpect(status().isCreated());
+
+        // Verify the entity saved to the repository has trimmed fields
+        verify(productRepository).save(productCaptor.capture());
+        Product capturedProduct = productCaptor.getValue();
+
+        assertThat(capturedProduct.getSku(), is("SKU-TRIMMED"));
+        assertThat(capturedProduct.getName(), is("Gaming Headset"));
     }
 
     @Test

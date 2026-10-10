@@ -19,6 +19,8 @@
 
 	<properties>
 		<java.version>17</java.version>
+		<!-- Explicitly override Tomcat version to address CVE-2025-24813 -->
+		<tomcat.version>10.1.36</tomcat.version>
 	</properties>
 
 	<dependencies>
