@@ -6,7 +6,6 @@ import lombok.*;
 import java.math.BigDecimal;
 
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -29,11 +28,19 @@ public class ProductRequestDto {
     @PositiveOrZero(message = "Stock quantity cannot be negative")
     private Integer stockQuantity;
 
-    public String getSku() {
-        return sku != null ? sku.trim() : null;
+    public void setSku(String sku) {
+        this.sku = sku != null ? sku.trim() : null;
     }
 
-    public String getName() {
-        return name != null ? name.trim() : null;
+    public void setName(String name) {
+        this.name = name != null ? name.trim() : null;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
+
+    public void setStockQuantity(Integer stockQuantity) {
+        this.stockQuantity = stockQuantity;
     }
 }

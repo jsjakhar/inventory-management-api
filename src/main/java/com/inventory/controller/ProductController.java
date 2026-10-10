@@ -38,14 +38,12 @@ public class ProductController {
 
     @PostMapping
     public ResponseEntity<ProductResponseDto> createProduct(@Valid @RequestBody ProductRequestDto requestDto) {
-        String cleanSku = requestDto.getSku();
-
-        if (productRepository.existsBySku(cleanSku)) {
-            throw new DuplicateSkuException("Product with SKU '" + cleanSku + "' already exists.");
+        if (productRepository.existsBySku(requestDto.getSku())) {
+            throw new DuplicateSkuException("Product with SKU '" + requestDto.getSku() + "' already exists.");
         }
 
         Product product = Product.builder()
-                .sku(cleanSku)
+                .sku(requestDto.getSku())
                 .name(requestDto.getName())
                 .price(requestDto.getPrice())
                 .stockQuantity(requestDto.getStockQuantity())
