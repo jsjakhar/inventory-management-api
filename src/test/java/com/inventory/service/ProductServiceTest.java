@@ -171,4 +171,149 @@ class ProductServiceTest {
 
         verify(productRepository).deleteById(1L);
     }
+
+    @Test
+    @DisplayName("updateProduct - Missing ID throws ResourceNotFoundException")
+    void updateProduct_NotFound_ThrowsException() {
+        ProductRequestDto requestDto = ProductRequestDto.builder()
+                .sku("SKU-UPDATE")
+                .name("Updated Name")
+                .price(new BigDecimal("49.99"))
+                .stockQuantity(10)
+                .build();
+
+        when(productRepository.findById(99L)).thenReturn(Optional.empty());
+
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
+                () -> productService.updateProduct(99L, requestDto)
+        );
+
+        assertThat(exception.getMessage(), containsString("Product not found with id: 99"));
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateProduct - Changed SKU that already exists throws DuplicateSkuException")
+    void updateProduct_ChangedSku_Duplicate_ThrowsException() {
+        Product existingProduct = Product.builder()
+                .id(1L)
+                .sku("OLD-SKU")
+                .name("Old Name")
+                .price(new BigDecimal("10.00"))
+                .stockQuantity(5)
+                .build();
+
+        ProductRequestDto requestDto = ProductRequestDto.builder()
+                .sku("NEW-EXISTING-SKU")
+                .name("Updated Name")
+                .price(new BigDecimal("20.00"))
+                .stockQuantity(10)
+                .build();
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(existingProduct));
+        when(productRepository.existsBySku("NEW-EXISTING-SKU")).thenReturn(true);
+
+        DuplicateSkuException exception = assertThrows(
+                DuplicateSkuException.class,
+                () -> productService.updateProduct(1L, requestDto)
+        );
+
+        assertThat(exception.getMessage(), containsString("already exists"));
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateProduct - Unchanged SKU skips existsBySku check and updates all fields")
+    void updateProduct_UnchangedSku_SkipsDuplicateCheckAndUpdatesAllFields() {
+        Product existingProduct = Product.builder()
+                .id(1L)
+                .sku("SAME-SKU")
+                .name("Old Name")
+                .price(new BigDecimal("10.00"))
+                .stockQuantity(5)
+                .build();
+
+        ProductRequestDto requestDto = ProductRequestDto.builder()
+                .sku("SAME-SKU") // Same SKU as existing
+                .name("Updated Name")
+                .price(new BigDecimal("25.00"))
+                .stockQuantity(30)
+                .build();
+
+        Product updatedSavedProduct = Product.builder()
+                .id(1L)
+                .sku("SAME-SKU")
+                .name("Updated Name")
+                .price(new BigDecimal("25.00"))
+                .stockQuantity(30)
+                .build();
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(existingProduct));
+        when(productRepository.save(any(Product.class))).thenReturn(updatedSavedProduct);
+
+        ProductResponseDto result = productService.updateProduct(1L, requestDto);
+
+        // 1. Verify existsBySku was NEVER called because SKU did not change (!equals guard)
+        verify(productRepository, never()).existsBySku(anyString());
+
+        // 2. Verify all 4 fields were updated on the entity before save
+        verify(productRepository).save(productCaptor.capture());
+        Product captured = productCaptor.getValue();
+
+        assertThat(captured.getSku(), is("SAME-SKU"));
+        assertThat(captured.getName(), is("Updated Name"));
+        assertThat(captured.getPrice(), is(new BigDecimal("25.00")));
+        assertThat(captured.getStockQuantity(), is(30));
+
+        // 3. Verify returned DTO reflects updated state
+        assertThat(result.getName(), is("Updated Name"));
+        assertThat(result.getPrice(), is(new BigDecimal("25.00")));
+        assertThat(result.getStockQuantity(), is(30));
+        assertThat(result.isInStock(), is(true));
+    }
+
+    @Test
+    @DisplayName("updateProduct - Changed SKU to unique value checks existsBySku and updates successfully")
+    void updateProduct_ChangedSkuToUnique_Success() {
+        Product existingProduct = Product.builder()
+                .id(1L)
+                .sku("OLD-SKU")
+                .name("Old Name")
+                .price(new BigDecimal("10.00"))
+                .stockQuantity(5)
+                .build();
+
+        ProductRequestDto requestDto = ProductRequestDto.builder()
+                .sku("BRAND-NEW-SKU")
+                .name("New Name")
+                .price(new BigDecimal("15.00"))
+                .stockQuantity(12)
+                .build();
+
+        Product savedProduct = Product.builder()
+                .id(1L)
+                .sku("BRAND-NEW-SKU")
+                .name("New Name")
+                .price(new BigDecimal("15.00"))
+                .stockQuantity(12)
+                .build();
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(existingProduct));
+        when(productRepository.existsBySku("BRAND-NEW-SKU")).thenReturn(false);
+        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+
+        ProductResponseDto result = productService.updateProduct(1L, requestDto);
+
+        verify(productRepository).existsBySku("BRAND-NEW-SKU");
+        verify(productRepository).save(productCaptor.capture());
+
+        Product captured = productCaptor.getValue();
+        assertThat(captured.getSku(), is("BRAND-NEW-SKU"));
+        assertThat(captured.getName(), is("New Name"));
+        assertThat(captured.getPrice(), is(new BigDecimal("15.00")));
+        assertThat(captured.getStockQuantity(), is(12));
+
+        assertThat(result.getSku(), is("BRAND-NEW-SKU"));
+    }
 }
