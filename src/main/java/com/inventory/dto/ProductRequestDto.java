@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 public class ProductRequestDto {
 
     @NotBlank(message = "SKU is required")
+    @Size(max = 255, message = "SKU must not exceed 255 characters")
+    @Pattern(regexp = "^[a-zA-Z0-9_-]+$", message = "SKU must contain only letters, numbers, hyphens, and underscores")
     private String sku;
 
     @NotBlank(message = "Product name is required")
@@ -26,4 +28,12 @@ public class ProductRequestDto {
     @NotNull(message = "Stock quantity is required")
     @PositiveOrZero(message = "Stock quantity cannot be negative")
     private Integer stockQuantity;
+
+    public String getSku() {
+        return sku != null ? sku.trim() : null;
+    }
+
+    public String getName() {
+        return name != null ? name.trim() : null;
+    }
 }

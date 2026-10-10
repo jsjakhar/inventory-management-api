@@ -2,6 +2,7 @@ package com.inventory.controller;
 
 import com.inventory.dto.ProductRequestDto;
 import com.inventory.dto.ProductResponseDto;
+import com.inventory.exception.DuplicateSkuException;
 import com.inventory.model.Product;
 import com.inventory.repository.ProductRepository;
 import jakarta.validation.Valid;
@@ -37,8 +38,14 @@ public class ProductController {
 
     @PostMapping
     public ResponseEntity<ProductResponseDto> createProduct(@Valid @RequestBody ProductRequestDto requestDto) {
+        String cleanSku = requestDto.getSku();
+
+        if (productRepository.existsBySku(cleanSku)) {
+            throw new DuplicateSkuException("Product with SKU '" + cleanSku + "' already exists.");
+        }
+
         Product product = Product.builder()
-                .sku(requestDto.getSku())
+                .sku(cleanSku)
                 .name(requestDto.getName())
                 .price(requestDto.getPrice())
                 .stockQuantity(requestDto.getStockQuantity())
